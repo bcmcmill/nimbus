@@ -1,0 +1,27 @@
+[package]
+name = "nimbus-discovery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Service discovery for the Nimbus RPC framework"
+keywords = ["rpc", "service-discovery", "dns"]
+categories = ["network-programming"]
+
+[features]
+default = ["dns"]
+dns = ["hickory-resolver"]
+registry = ["tokio-stream"]
+
+[dependencies]
+nimbus-core.workspace = true
+futures.workspace = true
+futures-core.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-stream = { workspace = true, optional = true }
+hickory-resolver = { workspace = true, optional = true }
+dashmap.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]

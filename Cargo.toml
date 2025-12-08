@@ -1,0 +1,138 @@
+[workspace]
+resolver = "2"
+members = [
+    "nimbus",
+    "nimbus-core",
+    "nimbus-codec",
+    "nimbus-transport",
+    "nimbus-macros",
+    "nimbus-middleware",
+    "nimbus-discovery",
+    "examples/hello-world",
+]
+
+# Root package for benchmarks
+[package]
+name = "nimbus-bench"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dev-dependencies]
+criterion = { workspace = true }
+nimbus = { workspace = true }
+nimbus-core = { workspace = true }
+nimbus-codec = { workspace = true }
+nimbus-transport = { workspace = true }
+rkyv = { workspace = true }
+ntex-bytes = { workspace = true }
+ntex-codec = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["Brandon"]
+repository = "https://github.com/brandon/nimbus"
+description = "Blazing-fast, zero-copy RPC framework built in Rust"
+keywords = ["rpc", "networking", "async", "zero-copy", "rkyv"]
+categories = ["network-programming", "asynchronous"]
+
+[workspace.dependencies]
+# Internal crates
+nimbus = { path = "nimbus" }
+nimbus-core = { path = "nimbus-core" }
+nimbus-codec = { path = "nimbus-codec" }
+nimbus-transport = { path = "nimbus-transport" }
+nimbus-macros = { path = "nimbus-macros" }
+nimbus-middleware = { path = "nimbus-middleware" }
+nimbus-discovery = { path = "nimbus-discovery" }
+
+# Serialization - rkyv for zero-copy
+rkyv = { version = "0.8", features = ["little_endian", "bytecheck"] }
+
+# Networking - ntex async framework
+# Use versions compatible with ntex 2.17's internal deps
+ntex = { version = "2.17", default-features = false }
+ntex-bytes = "0.1"
+ntex-codec = "0.6"
+ntex-io = "2.15"
+ntex-connect = "1.1"
+ntex-tls = "2"
+ntex-service = "3.7"
+ntex-util = "2.15"
+
+# Async utilities
+futures = "0.3"
+futures-core = "0.3"
+pin-project-lite = "0.2"
+async-stream = "0.3"
+tokio = { version = "1", features = ["sync", "time"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+# Error handling
+thiserror = "2"
+
+# Observability
+tracing = "0.1"
+
+# Concurrency
+parking_lot = "0.12"
+dashmap = "6"
+
+# Proc macro utilities (for nimbus-macros)
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+
+# DNS resolution (for nimbus-discovery)
+hickory-resolver = "0.25"
+
+# Testing and benchmarking
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.bench]
+lto = true
+codegen-units = 1
+
+# Benchmarks
+[[bench]]
+name = "codec"
+harness = false
+
+[[bench]]
+name = "frame"
+harness = false
+
+[[bench]]
+name = "pool"
+harness = false
+
+[[bench]]
+name = "mux"
+harness = false
+
+[[bench]]
+name = "throughput"
+harness = false

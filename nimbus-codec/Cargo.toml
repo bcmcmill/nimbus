@@ -1,0 +1,19 @@
+[package]
+name = "nimbus-codec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "rkyv-based codec for zero-copy RPC message framing"
+keywords = ["rpc", "codec", "rkyv", "zero-copy"]
+categories = ["network-programming", "encoding"]
+
+[dependencies]
+nimbus-core.workspace = true
+rkyv.workspace = true
+ntex-bytes.workspace = true
+ntex-codec.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]

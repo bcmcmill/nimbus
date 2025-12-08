@@ -1,0 +1,11 @@
+[package]
+name = "hello-world"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+nimbus = { path = "../../nimbus" }
+rkyv = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+thiserror = { workspace = true }

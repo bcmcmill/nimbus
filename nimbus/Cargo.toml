@@ -1,0 +1,38 @@
+[package]
+name = "nimbus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Blazing-fast, zero-copy RPC framework built in Rust, powered by RKYV serialization and ntex async networking"
+keywords = ["rpc", "networking", "async", "zero-copy", "rkyv"]
+categories = ["network-programming", "asynchronous"]
+readme = "../README.md"
+
+[features]
+default = ["tokio"]
+
+# Runtime selection
+tokio = ["nimbus-transport/tokio"]
+compio = ["nimbus-transport/compio"]
+
+# Optional features
+tls = ["nimbus-transport/tls"]
+discovery-dns = ["nimbus-discovery/dns"]
+discovery-registry = ["nimbus-discovery/registry"]
+tracing = ["nimbus-middleware/tracing"]
+
+# All features
+full = ["tls", "discovery-dns", "discovery-registry", "tracing"]
+
+[dependencies]
+nimbus-core.workspace = true
+nimbus-codec.workspace = true
+nimbus-transport.workspace = true
+nimbus-macros.workspace = true
+nimbus-middleware.workspace = true
+nimbus-discovery.workspace = true
+rkyv.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

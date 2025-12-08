@@ -1,0 +1,38 @@
+[package]
+name = "nimbus-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Transport implementations for the Nimbus RPC framework (TCP, UDP, Unix sockets, TLS)"
+keywords = ["rpc", "transport", "tcp", "networking"]
+categories = ["network-programming", "asynchronous"]
+
+[features]
+default = ["tokio"]
+tokio = ["ntex/tokio"]
+compio = ["ntex/compio"]
+tls = ["ntex-tls"]
+uds = []
+
+[dependencies]
+nimbus-core.workspace = true
+nimbus-codec.workspace = true
+ntex.workspace = true
+ntex-bytes.workspace = true
+ntex-io.workspace = true
+ntex-connect.workspace = true
+ntex-service.workspace = true
+ntex-util.workspace = true
+ntex-tls = { workspace = true, optional = true }
+rkyv.workspace = true
+futures.workspace = true
+futures-core.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+dashmap.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "time"] }

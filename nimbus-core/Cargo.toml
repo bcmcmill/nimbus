@@ -1,0 +1,16 @@
+[package]
+name = "nimbus-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Core types, traits, and error definitions for the Nimbus RPC framework"
+keywords = ["rpc", "core", "types"]
+categories = ["network-programming"]
+
+[dependencies]
+rkyv.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
