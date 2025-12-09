@@ -59,11 +59,7 @@ pub trait Interceptor: Send + Sync + 'static {
     /// This is called before the request is serialized and sent.
     /// The interceptor can modify the context (e.g., add metadata)
     /// or reject the request by returning an error.
-    fn intercept_request(
-        &self,
-        ctx: &mut Context,
-        request: &[u8],
-    ) -> Result<(), InterceptorError> {
+    fn intercept_request(&self, ctx: &mut Context, request: &[u8]) -> Result<(), InterceptorError> {
         let _ = (ctx, request);
         Ok(())
     }

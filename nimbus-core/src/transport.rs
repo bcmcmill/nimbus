@@ -22,7 +22,10 @@ pub struct StreamHandle {
 /// Trait for sending stream items.
 pub trait StreamSender: Send + Sync {
     /// Send a message on the stream.
-    fn send(&self, data: Vec<u8>) -> Pin<Box<dyn Future<Output = Result<(), NimbusError>> + Send + '_>>;
+    fn send(
+        &self,
+        data: Vec<u8>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), NimbusError>> + Send + '_>>;
 
     /// Close the send side of the stream.
     fn close(&self) -> Pin<Box<dyn Future<Output = Result<(), NimbusError>> + Send + '_>>;
@@ -32,7 +35,9 @@ pub trait StreamSender: Send + Sync {
 pub trait StreamReceiver: Send + Sync {
     /// Receive the next message from the stream.
     /// Returns `None` when the stream is closed.
-    fn recv(&self) -> Pin<Box<dyn Future<Output = Result<Option<AlignedVec>, NimbusError>> + Send + '_>>;
+    fn recv(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<AlignedVec>, NimbusError>> + Send + '_>>;
 }
 
 /// Core transport trait for RPC communication.

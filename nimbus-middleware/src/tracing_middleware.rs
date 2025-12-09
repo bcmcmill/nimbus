@@ -1,7 +1,7 @@
 //! Distributed tracing interceptor.
 
 use nimbus_core::{Context, NimbusError, TraceId};
-use tracing::{info_span, Instrument, Span};
+use tracing::{Instrument, Span, info_span};
 
 use crate::interceptor::{Interceptor, InterceptorError};
 
@@ -125,6 +125,9 @@ mod tests {
 
         interceptor.intercept_request(&mut ctx, &[]).unwrap();
 
-        assert_eq!(ctx.trace_id.as_ref().unwrap().as_bytes(), original_trace_id.as_bytes());
+        assert_eq!(
+            ctx.trace_id.as_ref().unwrap().as_bytes(),
+            original_trace_id.as_bytes()
+        );
     }
 }

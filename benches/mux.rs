@@ -3,10 +3,11 @@
 //! These benchmarks measure request multiplexing performance
 //! including registration, dispatch, and concurrent operations.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use std::hint::black_box;
+
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use nimbus_transport::Multiplexer;
 use rkyv::util::AlignedVec;
-use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 /// Benchmark register/dispatch pairs.
@@ -43,7 +44,7 @@ fn bench_mux_concurrent_pending(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             b.to_async(&rt).iter(|| async {
-                let mux = Arc::new(Multiplexer::new());
+                let mux = Multiplexer::new();
 
                 // Register all requests
                 let receivers: Vec<_> = (0..count)
@@ -178,36 +179,28 @@ fn bench_mux_pending_count(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark concurrent register/dispatch from multiple tasks.
-fn bench_mux_concurrent_tasks(c: &mut Criterion) {
+/// Benchmark sequential register/dispatch simulating multiple requests.
+/// Note: Multiplexer is designed for single-threaded use within ntex's worker model.
+fn bench_mux_sequential_requests(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    let mut group = c.benchmark_group("mux_concurrent_tasks");
+    let mut group = c.benchmark_group("mux_sequential_requests");
 
-    for tasks in [4, 16, 64] {
-        group.throughput(Throughput::Elements(tasks as u64));
+    for count in [4, 16, 64] {
+        group.throughput(Throughput::Elements(count as u64));
 
-        group.bench_with_input(BenchmarkId::from_parameter(tasks), &tasks, |b, &tasks| {
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             b.to_async(&rt).iter(|| async {
-                let mux = Arc::new(Multiplexer::new());
+                let mux = Multiplexer::new();
 
-                let handles: Vec<_> = (0..tasks)
-                    .map(|_| {
-                        let mux = mux.clone();
-                        tokio::spawn(async move {
-                            let (id, rx) = mux.register();
+                for _ in 0..count {
+                    let (id, rx) = mux.register();
 
-                            // Simulate immediate response
-                            let mut response = AlignedVec::new();
-                            response.extend_from_slice(b"response");
-                            mux.dispatch(id, response);
+                    // Simulate immediate response
+                    let mut response = AlignedVec::new();
+                    response.extend_from_slice(b"response");
+                    mux.dispatch(id, response);
 
-                            rx.await.unwrap()
-                        })
-                    })
-                    .collect();
-
-                for handle in handles {
-                    let result = handle.await.unwrap();
+                    let result = rx.await.unwrap();
                     let _ = black_box(result);
                 }
             });
@@ -225,7 +218,7 @@ criterion_group!(
     bench_mux_cancel,
     bench_mux_dispatch_miss,
     bench_mux_pending_count,
-    bench_mux_concurrent_tasks,
+    bench_mux_sequential_requests,
 );
 
 criterion_main!(benches);

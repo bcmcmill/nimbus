@@ -3,7 +3,7 @@
 //! These benchmarks measure full RPC path performance including
 //! serialization, framing, and simulated network I/O.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use nimbus_codec::NimbusCodec;
 use nimbus_core::{MessageType, RpcEnvelope};
 use ntex_bytes::BytesMut;
@@ -81,8 +81,9 @@ fn bench_rpc_deserialize_path(c: &mut Criterion) {
                     let aligned = codec.decode(black_box(&mut buf)).unwrap().unwrap();
 
                     // Step 2: Zero-copy access
-                    let archived = rkyv::access::<nimbus_core::ArchivedRpcEnvelope, RkyvError>(&aligned)
-                        .unwrap();
+                    let archived =
+                        rkyv::access::<nimbus_core::ArchivedRpcEnvelope, RkyvError>(&aligned)
+                            .unwrap();
 
                     black_box(archived.request_id);
                     black_box(&archived.service);
@@ -131,7 +132,8 @@ fn bench_rpc_roundtrip(c: &mut Criterion) {
 
                     // Access
                     let archived =
-                        rkyv::access::<nimbus_core::ArchivedRpcEnvelope, RkyvError>(&aligned).unwrap();
+                        rkyv::access::<nimbus_core::ArchivedRpcEnvelope, RkyvError>(&aligned)
+                            .unwrap();
 
                     black_box(archived.request_id);
                 });

@@ -111,10 +111,7 @@ pub trait Resolver: Send + Sync + 'static {
     ///
     /// Returns a stream that yields updated endpoint lists whenever
     /// the service configuration changes.
-    fn watch(
-        &self,
-        service: &str,
-    ) -> impl Stream<Item = Vec<Endpoint>> + Send + Unpin;
+    fn watch(&self, service: &str) -> impl Stream<Item = Vec<Endpoint>> + Send + Unpin;
 }
 
 /// A static resolver that returns pre-configured endpoints.
@@ -242,24 +239,30 @@ impl<R: Resolver> Resolver for CachingResolver<R> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[ntex::test]
     async fn test_static_resolver() {
         let resolver = StaticResolver::new();
-        resolver.add_endpoint("my-service", "127.0.0.1:8080".parse::<SocketAddr>().unwrap());
-        resolver.add_endpoint("my-service", "127.0.0.1:8081".parse::<SocketAddr>().unwrap());
+        resolver.add_endpoint(
+            "my-service",
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        );
+        resolver.add_endpoint(
+            "my-service",
+            "127.0.0.1:8081".parse::<SocketAddr>().unwrap(),
+        );
 
         let endpoints = resolver.resolve("my-service").await.unwrap();
         assert_eq!(endpoints.len(), 2);
     }
 
-    #[tokio::test]
+    #[ntex::test]
     async fn test_static_resolver_not_found() {
         let resolver = StaticResolver::new();
         let result = resolver.resolve("unknown").await;
         assert!(matches!(result, Err(ResolveError::NotFound(_))));
     }
 
-    #[tokio::test]
+    #[ntex::test]
     async fn test_caching_resolver() {
         let inner = StaticResolver::new();
         inner.add_endpoint("test", "127.0.0.1:8080".parse::<SocketAddr>().unwrap());

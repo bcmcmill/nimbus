@@ -222,9 +222,18 @@ mod tests {
         codec.encode_slice(b"third", &mut buf).unwrap();
 
         // Decode them
-        assert_eq!(codec.decode(&mut buf).unwrap().unwrap().as_slice(), b"first");
-        assert_eq!(codec.decode(&mut buf).unwrap().unwrap().as_slice(), b"second");
-        assert_eq!(codec.decode(&mut buf).unwrap().unwrap().as_slice(), b"third");
+        assert_eq!(
+            codec.decode(&mut buf).unwrap().unwrap().as_slice(),
+            b"first"
+        );
+        assert_eq!(
+            codec.decode(&mut buf).unwrap().unwrap().as_slice(),
+            b"second"
+        );
+        assert_eq!(
+            codec.decode(&mut buf).unwrap().unwrap().as_slice(),
+            b"third"
+        );
         assert!(codec.decode(&mut buf).unwrap().is_none());
     }
 

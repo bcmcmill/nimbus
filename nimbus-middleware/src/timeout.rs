@@ -110,8 +110,8 @@ mod tests {
 
     #[test]
     fn test_enforces_max_deadline() {
-        let interceptor = TimeoutInterceptor::new(Duration::from_secs(30))
-            .with_max(Duration::from_secs(5));
+        let interceptor =
+            TimeoutInterceptor::new(Duration::from_secs(30)).with_max(Duration::from_secs(5));
 
         let mut ctx = Context::new();
         ctx.deadline = Some(Instant::now() + Duration::from_secs(100));

@@ -165,7 +165,8 @@ impl Context {
     /// Returns `None` if no deadline is set or deadline has passed.
     #[must_use]
     pub fn remaining(&self) -> Option<Duration> {
-        self.deadline.and_then(|d| d.checked_duration_since(Instant::now()))
+        self.deadline
+            .and_then(|d| d.checked_duration_since(Instant::now()))
     }
 
     /// Check if the deadline has passed.
@@ -246,7 +247,10 @@ mod tests {
 
     #[test]
     fn test_trace_id_display() {
-        let trace_id = TraceId::from_bytes([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]);
+        let trace_id = TraceId::from_bytes([
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab,
+            0xcd, 0xef,
+        ]);
         assert_eq!(trace_id.to_string(), "0123456789abcdef0123456789abcdef");
     }
 }

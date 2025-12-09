@@ -1,112 +1,130 @@
-//! TCP transport implementation.
+//! Unix domain socket transport implementation.
+//!
+//! This module provides Unix domain socket support for local IPC,
+//! offering lower latency than TCP for same-machine communication.
 
 use std::cell::RefCell;
-use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+use std::pin::pin;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::future::{Either, select};
 use futures_timer::Delay;
-use ntex::connect::{Connect, Connector};
-use ntex::io::{Io, IoBoxed};
+use ntex::io::IoBoxed;
 use ntex::service::fn_service;
 use ntex::util::Buf;
 use ntex_bytes::BytesMut;
 use ntex_codec::Decoder;
 use rkyv::util::AlignedVec;
-use std::pin::pin;
 
 use nimbus_codec::NimbusCodec;
 use nimbus_core::{Context, NimbusError, TransportError};
 
 use crate::mux::Multiplexer;
+use crate::tcp::RequestHandler;
 
-/// Configuration for TCP client.
+/// Configuration for Unix socket client.
 #[derive(Debug, Clone)]
-pub struct TcpClientConfig {
+pub struct UnixClientConfig {
     /// Connection timeout.
     pub connect_timeout: Duration,
 
     /// Request timeout (if not specified in context).
     pub request_timeout: Duration,
 
-    /// Enable TCP nodelay.
-    pub nodelay: bool,
-
     /// Maximum frame size.
     pub max_frame_size: usize,
 }
 
-impl Default for TcpClientConfig {
+impl Default for UnixClientConfig {
     fn default() -> Self {
         Self {
             connect_timeout: Duration::from_secs(10),
             request_timeout: Duration::from_secs(30),
-            nodelay: true,
             max_frame_size: 16 * 1024 * 1024,
         }
     }
 }
 
-/// TCP client for RPC communication.
+/// Unix socket client for RPC communication.
 ///
-/// Note: This client is designed to work within ntex's single-threaded
-/// per-worker model. For multi-threaded access, create separate clients
-/// per worker.
-pub struct TcpClient {
-    config: TcpClientConfig,
+/// Provides lower latency than TCP for local IPC by bypassing
+/// the network stack.
+///
+/// ## Example
+///
+/// ```rust,ignore
+/// use nimbus_transport::UnixClient;
+///
+/// let client = UnixClient::new();
+/// let conn = client.connect("/tmp/nimbus.sock").await?;
+/// ```
+pub struct UnixClient {
+    config: UnixClientConfig,
 }
 
-impl TcpClient {
-    /// Create a new TCP client with default configuration.
+impl UnixClient {
+    /// Create a new Unix socket client with default configuration.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_config(TcpClientConfig::default())
+        Self::with_config(UnixClientConfig::default())
     }
 
-    /// Create a TCP client with custom configuration.
+    /// Create a Unix socket client with custom configuration.
     #[must_use]
-    pub fn with_config(config: TcpClientConfig) -> Self {
+    pub fn with_config(config: UnixClientConfig) -> Self {
         Self { config }
     }
 
-    /// Connect to an address and return a dedicated connection.
-    pub async fn connect(&self, addr: SocketAddr) -> Result<TcpConnection, TransportError> {
-        let connector = Connector::default();
-        let io = connector
-            .connect(Connect::new(addr))
-            .await
-            .map_err(|e| TransportError::ConnectionFailed(format!("{}", e)))?;
+    /// Connect to a Unix socket and return a dedicated connection.
+    pub async fn connect(&self, path: impl AsRef<Path>) -> Result<UnixConnection, TransportError> {
+        let path = path.as_ref();
 
-        Ok(TcpConnection::new(
-            io.seal().into(),
-            self.config.max_frame_size,
-        ))
+        // Connect with timeout using ntex's native unix_connect
+        let connect_fut = pin!(ntex::rt::unix_connect(path));
+        let timeout_fut = pin!(Delay::new(self.config.connect_timeout));
+
+        let io = match select(connect_fut, timeout_fut).await {
+            Either::Left((Ok(io), _)) => io,
+            Either::Left((Err(e), _)) => {
+                return Err(TransportError::ConnectionFailed(format!(
+                    "failed to connect to {}: {}",
+                    path.display(),
+                    e
+                )));
+            }
+            Either::Right(_) => {
+                return Err(TransportError::ConnectionFailed(format!(
+                    "connection to {} timed out",
+                    path.display()
+                )));
+            }
+        };
+
+        Ok(UnixConnection::new(io.into(), self.config.max_frame_size))
     }
 }
 
-impl Default for TcpClient {
+impl Default for UnixClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// A single TCP connection.
+/// A single Unix socket connection.
 ///
 /// This type is designed for single-threaded use within ntex's worker model.
-/// It does NOT implement the core `Transport` trait (which requires Send+Sync)
-/// because ntex uses Rc-based IO types.
-///
-/// Use `Rc<TcpConnection>` if you need to share within a single worker.
-pub struct TcpConnection {
+/// Use `Rc<UnixConnection>` if you need to share within a single worker.
+pub struct UnixConnection {
     io: Rc<RefCell<IoBoxed>>,
     codec: NimbusCodec,
     mux: Rc<Multiplexer>,
 }
 
-impl TcpConnection {
-    /// Create a new TCP connection from an IO handle.
+impl UnixConnection {
+    /// Create a new Unix connection from an IO handle.
     pub fn new(io: IoBoxed, max_frame_size: usize) -> Self {
         Self {
             io: Rc::new(RefCell::new(io)),
@@ -133,9 +151,9 @@ impl TcpConnection {
 
         // Encode the frame
         let mut buf = BytesMut::with_capacity(4 + data.len());
-        self.codec.encode_slice(data, &mut buf).map_err(|e| {
-            TransportError::Io(std::sync::Arc::new(std::io::Error::other(format!("{}", e))))
-        })?;
+        self.codec
+            .encode_slice(data, &mut buf)
+            .map_err(|e| TransportError::Io(Arc::new(std::io::Error::other(format!("{}", e)))))?;
 
         // Write to buffer and flush
         let _ = io
@@ -143,11 +161,11 @@ impl TcpConnection {
                 write_buf.extend_from_slice(&buf);
                 Ok::<_, std::io::Error>(())
             })
-            .map_err(|e| TransportError::Io(std::sync::Arc::new(e)))?;
+            .map_err(|e| TransportError::Io(Arc::new(e)))?;
 
-        io.flush(true).await.map_err(|e| {
-            TransportError::Io(std::sync::Arc::new(std::io::Error::other(format!("{}", e))))
-        })?;
+        io.flush(true)
+            .await
+            .map_err(|e| TransportError::Io(Arc::new(std::io::Error::other(format!("{}", e)))))?;
 
         Ok(())
     }
@@ -178,17 +196,14 @@ impl TcpConnection {
                 Ok(None) => {
                     // Need more data, wait for read
                     io.read_ready().await.map_err(|e| {
-                        TransportError::Io(std::sync::Arc::new(std::io::Error::other(format!(
-                            "{}",
-                            e
-                        ))))
+                        TransportError::Io(Arc::new(std::io::Error::other(format!("{}", e))))
                     })?;
 
                     if io.is_closed() {
                         return Err(TransportError::ConnectionClosed);
                     }
                 }
-                Err(e) => return Err(TransportError::Io(std::sync::Arc::new(e))),
+                Err(e) => return Err(TransportError::Io(Arc::new(e))),
             }
         }
     }
@@ -222,11 +237,11 @@ impl TcpConnection {
     }
 }
 
-/// Configuration for TCP server.
+/// Configuration for Unix socket server.
 #[derive(Debug, Clone)]
-pub struct TcpServerConfig {
-    /// Address to bind to.
-    pub bind_addr: String,
+pub struct UnixServerConfig {
+    /// Path to the Unix socket file.
+    pub socket_path: PathBuf,
 
     /// Number of worker threads.
     pub workers: usize,
@@ -239,44 +254,95 @@ pub struct TcpServerConfig {
 
     /// Maximum frame size.
     pub max_frame_size: usize,
-
-    /// Keepalive timeout.
-    pub keepalive_timeout: Duration,
 }
 
-impl Default for TcpServerConfig {
+impl Default for UnixServerConfig {
     fn default() -> Self {
         Self {
-            bind_addr: "0.0.0.0:9000".to_string(),
+            socket_path: PathBuf::from("/tmp/nimbus.sock"),
             workers: num_cpus::get(),
             max_connections: 10000,
             backlog: 2048,
             max_frame_size: 16 * 1024 * 1024,
-            keepalive_timeout: Duration::from_secs(60),
         }
     }
 }
 
-/// TCP server for accepting RPC connections.
-pub struct TcpServer<H> {
-    config: TcpServerConfig,
+impl UnixServerConfig {
+    /// Create a new config with the given socket path.
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self {
+            socket_path: path.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Set the socket path.
+    #[must_use]
+    pub fn socket_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.socket_path = path.into();
+        self
+    }
+
+    /// Set the number of worker threads.
+    #[must_use]
+    pub fn workers(mut self, workers: usize) -> Self {
+        self.workers = workers;
+        self
+    }
+
+    /// Set the maximum concurrent connections.
+    #[must_use]
+    pub fn max_connections(mut self, max: usize) -> Self {
+        self.max_connections = max;
+        self
+    }
+
+    /// Set the maximum frame size.
+    #[must_use]
+    pub fn max_frame_size(mut self, size: usize) -> Self {
+        self.max_frame_size = size;
+        self
+    }
+}
+
+/// Unix socket server for accepting RPC connections.
+///
+/// ## Example
+///
+/// ```rust,ignore
+/// use nimbus_transport::{UnixServer, UnixServerConfig, RequestHandler};
+///
+/// struct MyHandler;
+/// impl RequestHandler for MyHandler {
+///     async fn handle(&self, request: AlignedVec) -> Result<Vec<u8>, NimbusError> {
+///         Ok(vec![])
+///     }
+/// }
+///
+/// let config = UnixServerConfig::new("/tmp/my-service.sock");
+/// let server = UnixServer::with_config(config, MyHandler);
+/// server.run().await?;
+/// ```
+pub struct UnixServer<H> {
+    config: UnixServerConfig,
     handler: Arc<H>,
 }
 
-impl<H> TcpServer<H>
+impl<H> UnixServer<H>
 where
     H: RequestHandler + Send + Sync + 'static,
 {
-    /// Create a new TCP server with the given handler.
-    pub fn new(handler: H) -> Self {
+    /// Create a new Unix socket server with the given path and handler.
+    pub fn new(path: impl Into<PathBuf>, handler: H) -> Self {
         Self {
-            config: TcpServerConfig::default(),
+            config: UnixServerConfig::new(path),
             handler: Arc::new(handler),
         }
     }
 
     /// Create a server with custom configuration.
-    pub fn with_config(config: TcpServerConfig, handler: H) -> Self {
+    pub fn with_config(config: UnixServerConfig, handler: H) -> Self {
         Self {
             config,
             handler: Arc::new(handler),
@@ -284,22 +350,29 @@ where
     }
 
     /// Run the server.
+    ///
+    /// This will remove any existing socket file at the configured path
+    /// before binding.
     pub async fn run(self) -> std::io::Result<()> {
         let handler = self.handler.clone();
         let max_frame_size = self.config.max_frame_size;
+
+        // Remove stale socket file if it exists
+        if self.config.socket_path.exists() {
+            std::fs::remove_file(&self.config.socket_path)?;
+        }
 
         ntex::server::build()
             .workers(self.config.workers)
             .maxconn(self.config.max_connections)
             .backlog(self.config.backlog as i32)
-            .bind("nimbus-tcp", &self.config.bind_addr, move |_| {
+            .bind_uds("nimbus-uds", &self.config.socket_path, move |_| {
                 let handler = handler.clone();
-                fn_service(move |io: Io<_>| {
+                fn_service(move |io: ntex::io::Io<_>| {
                     let handler = handler.clone();
                     async move {
-                        // Each worker gets its own Rc wrapper around the shared Arc handler
                         let local_handler = Rc::new(handler);
-                        handle_connection(io.seal().into(), local_handler, max_frame_size).await;
+                        handle_connection(io.into(), local_handler, max_frame_size).await;
                         Ok::<_, std::io::Error>(())
                     }
                 })
@@ -309,27 +382,18 @@ where
     }
 }
 
-/// Trait for handling incoming RPC requests.
-pub trait RequestHandler {
-    /// Handle an incoming request.
-    fn handle(
-        &self,
-        request: AlignedVec,
-    ) -> impl std::future::Future<Output = Result<Vec<u8>, NimbusError>>;
-}
-
 async fn handle_connection<H>(io: IoBoxed, handler: Rc<Arc<H>>, max_frame_size: usize)
 where
     H: RequestHandler + Send + Sync + 'static,
 {
     let codec = NimbusCodec::with_max_frame_size(max_frame_size);
 
-    tracing::debug!("Connection established");
+    tracing::debug!("Unix connection established");
 
     loop {
         // Wait for data to be available
         if io.read_ready().await.is_err() || io.is_closed() {
-            tracing::debug!("Connection closed");
+            tracing::debug!("Unix connection closed");
             break;
         }
 
@@ -396,5 +460,30 @@ mod num_cpus {
         std::thread::available_parallelism()
             .map(|p| p.get())
             .unwrap_or(4)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unix_client_creation() {
+        let client = UnixClient::new();
+        assert_eq!(client.config.connect_timeout, Duration::from_secs(10));
+        assert_eq!(client.config.request_timeout, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_unix_server_config() {
+        let config = UnixServerConfig::new("/tmp/test.sock")
+            .workers(4)
+            .max_connections(1000)
+            .max_frame_size(1024 * 1024);
+
+        assert_eq!(config.socket_path, PathBuf::from("/tmp/test.sock"));
+        assert_eq!(config.workers, 4);
+        assert_eq!(config.max_connections, 1000);
+        assert_eq!(config.max_frame_size, 1024 * 1024);
     }
 }

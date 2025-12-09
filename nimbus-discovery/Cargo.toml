@@ -11,17 +11,18 @@ categories = ["network-programming"]
 [features]
 default = ["dns"]
 dns = ["hickory-resolver"]
-registry = ["tokio-stream"]
+registry = ["async-broadcast"]
 
 [dependencies]
 nimbus-core.workspace = true
+ntex.workspace = true
 futures.workspace = true
 futures-core.workspace = true
-tokio = { workspace = true, features = ["sync", "time"] }
-tokio-stream = { workspace = true, optional = true }
 hickory-resolver = { workspace = true, optional = true }
+async-broadcast = { workspace = true, optional = true }
 dashmap.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+ntex = { version = "2.17.0", features = ["tokio"] }

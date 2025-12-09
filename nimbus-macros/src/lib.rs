@@ -23,20 +23,14 @@ mod generate;
 mod parse;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, ItemTrait};
+use syn::{ItemTrait, parse_macro_input};
 
 /// Define an RPC service from a trait.
 ///
 /// ## Usage
 ///
-/// Apply this attribute to a trait to generate RPC infrastructure:
-///
-/// ```rust
-/// use nimbus_macros::service;
-///
-/// // The macro generates request/response enums and client/server stubs
-/// // Note: Full code generation is still in development
-/// ```
+/// Apply this attribute to a trait to generate RPC infrastructure.
+/// The macro generates request/response enums and client/server stubs.
 ///
 /// ## Generated Items
 ///

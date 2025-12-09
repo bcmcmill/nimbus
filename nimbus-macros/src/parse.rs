@@ -120,10 +120,7 @@ impl MethodDefinition {
 
         // Validate async
         if sig.asyncness.is_none() {
-            return Err(Error::new_spanned(
-                sig,
-                "RPC methods must be async",
-            ));
+            return Err(Error::new_spanned(sig, "RPC methods must be async"));
         }
 
         // Check for self receiver
@@ -133,13 +130,13 @@ impl MethodDefinition {
                 return Err(Error::new_spanned(
                     sig,
                     "RPC methods must take &self or &mut self",
-                ))
+                ));
             }
             None => {
                 return Err(Error::new_spanned(
                     sig,
                     "RPC methods must take &self or &mut self",
-                ))
+                ));
             }
         };
 
@@ -191,7 +188,7 @@ impl MethodDefinition {
                         return Err(Error::new_spanned(
                             pat,
                             "expected identifier pattern for argument",
-                        ))
+                        ));
                     }
                 };
 
@@ -215,7 +212,7 @@ impl MethodDefinition {
                 return Err(Error::new_spanned(
                     output,
                     "RPC methods must return Result<T, E>",
-                ))
+                ));
             }
             ReturnType::Type(_, ty) => ty.as_ref().clone(),
         };

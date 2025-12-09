@@ -5,11 +5,13 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
+use async_broadcast::{Receiver, Sender, broadcast};
 use dashmap::DashMap;
 use futures_core::Stream;
-use tokio::sync::watch;
 
 use crate::resolver::{Endpoint, ResolveError, Resolver};
 
@@ -89,8 +91,8 @@ pub struct RegistryClient {
     config: RegistryConfig,
     /// Cache of resolved endpoints.
     cache: DashMap<String, Vec<Endpoint>>,
-    /// Watch channels for each service.
-    watchers: DashMap<String, watch::Sender<Vec<Endpoint>>>,
+    /// Broadcast channels for each service.
+    broadcasters: DashMap<String, Sender<Vec<Endpoint>>>,
 }
 
 impl RegistryClient {
@@ -106,7 +108,7 @@ impl RegistryClient {
         Self {
             config,
             cache: DashMap::new(),
-            watchers: DashMap::new(),
+            broadcasters: DashMap::new(),
         }
     }
 
@@ -196,25 +198,40 @@ impl Resolver for RegistryClient {
     fn watch(&self, service: &str) -> impl Stream<Item = Vec<Endpoint>> + Send + Unpin {
         let service = service.to_string();
 
-        // Get or create a watch channel for this service
+        // Get or create a broadcast channel for this service
         let rx = self
-            .watchers
+            .broadcasters
             .entry(service.clone())
             .or_insert_with(|| {
-                let initial = self
-                    .cache
-                    .get(&service)
-                    .map(|e| e.clone())
-                    .unwrap_or_default();
-                let (tx, _) = watch::channel(initial);
+                // Create a broadcast channel with capacity for updates
+                let (tx, _rx) = broadcast::<Vec<Endpoint>>(16);
                 tx
             })
-            .subscribe();
+            .new_receiver();
 
-        // Convert watch receiver to a stream
-        tokio_stream::wrappers::WatchStream::new(rx)
+        // Wrap the receiver as a Stream
+        BroadcastStream { rx }
     }
 }
+
+/// Stream wrapper for broadcast receiver.
+struct BroadcastStream {
+    rx: Receiver<Vec<Endpoint>>,
+}
+
+impl Stream for BroadcastStream {
+    type Item = Vec<Endpoint>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match Pin::new(&mut self.rx).poll_next(cx) {
+            Poll::Ready(Some(item)) => Poll::Ready(Some(item)),
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+impl Unpin for BroadcastStream {}
 
 /// Extension trait for Endpoint to add metadata.
 trait EndpointExt {
@@ -232,14 +249,14 @@ impl EndpointExt for Endpoint {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_registry_client_creation() {
+    #[test]
+    fn test_registry_client_creation() {
         let client = RegistryClient::new("http://localhost:8500");
         assert_eq!(client.endpoint(), "http://localhost:8500");
     }
 
-    #[tokio::test]
-    async fn test_registry_config() {
+    #[test]
+    fn test_registry_config() {
         let config = RegistryConfig::new("http://consul:8500")
             .timeout(Duration::from_secs(10))
             .refresh_interval(Duration::from_secs(60))
@@ -251,7 +268,7 @@ mod tests {
         assert_eq!(config.auth_token, Some("my-token".to_string()));
     }
 
-    #[tokio::test]
+    #[ntex::test]
     async fn test_register_and_resolve() {
         let client = RegistryClient::new("http://localhost:8500");
 

@@ -15,7 +15,6 @@ tracing = ["dep:tracing"]
 [dependencies]
 nimbus-core.workspace = true
 futures.workspace = true
-tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true, optional = true }
 thiserror.workspace = true
 

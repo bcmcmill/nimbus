@@ -63,8 +63,8 @@ pub use nimbus_codec::{AlignedBufferPool, AlignedVec, NimbusCodec, PooledBuffer}
 
 // Re-export transport
 pub use nimbus_transport::{
-    ConnectionPool, Multiplexer, PoolConfig, PooledConnection, TcpClient, TcpClientConfig,
-    TcpConnection, TcpServer, TcpServerConfig, RequestHandler,
+    ConnectionPool, Multiplexer, PoolConfig, PooledConnection, RequestHandler, TcpClient,
+    TcpClientConfig, TcpConnection, TcpServer, TcpServerConfig,
 };
 
 // Re-export macros
@@ -95,7 +95,7 @@ pub use rkyv::{Archive, Deserialize, Serialize};
 /// ```
 pub mod prelude {
     pub use crate::{
-        service, Archive, Context, Deserialize, NimbusError, Serialize, TcpClient, TcpServer,
+        Archive, Context, Deserialize, NimbusError, Serialize, TcpClient, TcpServer, service,
     };
 
     pub use nimbus_core::Transport;

@@ -1,13 +1,16 @@
 //! Connection pooling for RPC clients.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use async_lock::Semaphore;
 use dashmap::DashMap;
+use futures::future::{Either, select};
+use futures_timer::Delay;
 use parking_lot::Mutex;
-use tokio::sync::Semaphore;
+use std::pin::pin;
 
 use nimbus_core::TransportError;
 
@@ -167,7 +170,7 @@ impl<C: Send + 'static> ConnectionPoolInner<C> {
     }
 
     fn cleanup(&self) {
-        for mut entry in self.endpoints.iter_mut() {
+        for entry in self.endpoints.iter_mut() {
             let mut conns = entry.value().connections.lock();
             let before = conns.len();
             conns.retain(|c| {
@@ -236,10 +239,13 @@ impl<C: Send + 'static> ConnectionPool<C> {
         }
 
         // Ensure endpoint pool exists
-        self.inner.endpoints.entry(addr).or_insert_with(|| EndpointPool {
-            connections: Mutex::new(Vec::new()),
-            semaphore: Semaphore::new(self.inner.config.max_connections_per_endpoint),
-        });
+        self.inner
+            .endpoints
+            .entry(addr)
+            .or_insert_with(|| EndpointPool {
+                connections: Mutex::new(Vec::new()),
+                semaphore: Semaphore::new(self.inner.config.max_connections_per_endpoint),
+            });
 
         let endpoint = self.inner.endpoints.get(&addr).unwrap();
 
@@ -265,19 +271,19 @@ impl<C: Send + 'static> ConnectionPool<C> {
 
         // Need to create a new connection
         // Try to acquire a permit (respects max connections)
-        let permit = tokio::time::timeout(
-            self.inner.config.acquire_timeout,
-            endpoint.semaphore.acquire(),
-        )
-        .await
-        .map_err(|_| TransportError::PoolExhausted)?
-        .map_err(|_| TransportError::ConnectionClosed)?;
+        let acquire_fut = pin!(endpoint.semaphore.acquire());
+        let timeout_fut = pin!(Delay::new(self.inner.config.acquire_timeout));
+
+        let permit = match select(acquire_fut, timeout_fut).await {
+            Either::Left((permit, _)) => permit,
+            Either::Right(_) => return Err(TransportError::PoolExhausted),
+        };
 
         // Create the connection
         let connection = create().await?;
 
         // Forget the permit - it will be returned when the connection is returned to pool
-        permit.forget();
+        std::mem::forget(permit);
 
         Ok(PooledConnection {
             connection: Some(connection),
@@ -333,7 +339,7 @@ pub struct PoolStats {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[ntex::test]
     async fn test_pool_create() {
         let pool: ConnectionPool<String> = ConnectionPool::new(PoolConfig::default());
 
@@ -346,7 +352,7 @@ mod tests {
         assert_eq!(conn.connection(), "test connection");
     }
 
-    #[tokio::test]
+    #[ntex::test]
     async fn test_pool_reuse() {
         let pool: ConnectionPool<usize> = ConnectionPool::new(PoolConfig::default());
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();

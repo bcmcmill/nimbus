@@ -12,7 +12,7 @@ use nimbus::{
     Context, NimbusCodec, NimbusError, RequestHandler, TcpClient, TcpClientConfig, TcpServer,
     TcpServerConfig,
 };
-use rkyv::{rancor::Error as RkyvError, util::AlignedVec, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize, rancor::Error as RkyvError, util::AlignedVec};
 use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;
 
@@ -45,7 +45,10 @@ pub enum GreeterResponse {
 // Define the service trait
 pub trait Greeter {
     /// Greet someone by name.
-    fn greet(&self, name: String) -> impl std::future::Future<Output = Result<String, GreetError>> + Send;
+    fn greet(
+        &self,
+        name: String,
+    ) -> impl std::future::Future<Output = Result<String, GreetError>> + Send;
 
     /// Get the greeting count.
     fn get_count(&self) -> impl std::future::Future<Output = u64> + Send;

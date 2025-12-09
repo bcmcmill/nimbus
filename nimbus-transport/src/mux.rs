@@ -3,8 +3,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dashmap::DashMap;
+use ntex::channel::oneshot;
 use rkyv::util::AlignedVec;
-use tokio::sync::oneshot;
 
 use nimbus_core::{NimbusError, TransportError};
 
@@ -131,11 +131,11 @@ impl Default for Multiplexer {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_register_and_dispatch() {
+    #[ntex::test]
+    async fn test_register_and_dispatch() {
         let mux = Multiplexer::new();
 
-        let (id, mut rx) = mux.register();
+        let (id, rx) = mux.register();
         assert!(mux.has_pending());
         assert_eq!(mux.pending_count(), 1);
 
@@ -143,7 +143,7 @@ mod tests {
         assert!(mux.dispatch(id, response));
 
         // Receiver should have the response
-        let result = rx.try_recv();
+        let result = rx.await;
         assert!(result.is_ok());
     }
 
@@ -156,20 +156,20 @@ mod tests {
         assert!(!mux.dispatch(999, response));
     }
 
-    #[test]
-    fn test_cancel() {
+    #[ntex::test]
+    async fn test_cancel() {
         let mux = Multiplexer::new();
 
-        let (id, mut rx) = mux.register();
+        let (id, rx) = mux.register();
         mux.cancel(id);
 
         // Receiver should get cancellation error
-        let result = rx.try_recv().unwrap();
+        let result = rx.await.unwrap();
         assert!(matches!(result, Err(NimbusError::Cancelled)));
     }
 
-    #[test]
-    fn test_cancel_all() {
+    #[ntex::test]
+    async fn test_cancel_all() {
         let mux = Multiplexer::new();
 
         let (_id1, rx1) = mux.register();
@@ -183,8 +183,8 @@ mod tests {
         assert_eq!(mux.pending_count(), 0);
 
         // All receivers should get connection closed error
-        for mut rx in [rx1, rx2, rx3] {
-            let result = rx.try_recv().unwrap();
+        for rx in [rx1, rx2, rx3] {
+            let result = rx.await.unwrap();
             assert!(matches!(
                 result,
                 Err(NimbusError::Transport(TransportError::ConnectionClosed))

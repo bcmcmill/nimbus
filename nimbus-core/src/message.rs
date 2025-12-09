@@ -95,7 +95,12 @@ impl RpcEnvelope {
 
     /// Create a response envelope.
     #[must_use]
-    pub fn response(request_id: u64, service: impl Into<String>, method: impl Into<String>, payload: Vec<u8>) -> Self {
+    pub fn response(
+        request_id: u64,
+        service: impl Into<String>,
+        method: impl Into<String>,
+        payload: Vec<u8>,
+    ) -> Self {
         Self {
             request_id,
             message_type: MessageType::Response,
@@ -186,7 +191,11 @@ impl RpcEnvelope {
 
     /// Create a stream end message.
     #[must_use]
-    pub fn stream_end(request_id: u64, service: impl Into<String>, method: impl Into<String>) -> Self {
+    pub fn stream_end(
+        request_id: u64,
+        service: impl Into<String>,
+        method: impl Into<String>,
+    ) -> Self {
         Self {
             request_id,
             message_type: MessageType::StreamEnd,
@@ -205,7 +214,10 @@ impl RpcEnvelope {
     /// Check if this is a response message.
     #[must_use]
     pub fn is_response(&self) -> bool {
-        matches!(self.message_type, MessageType::Response | MessageType::Error)
+        matches!(
+            self.message_type,
+            MessageType::Response | MessageType::Error
+        )
     }
 
     /// Check if this is a streaming message.
@@ -272,12 +284,7 @@ mod tests {
 
     #[test]
     fn test_envelope_roundtrip() {
-        let envelope = RpcEnvelope::request(
-            42,
-            "calculator",
-            "add",
-            vec![1, 2, 3, 4],
-        );
+        let envelope = RpcEnvelope::request(42, "calculator", "add", vec![1, 2, 3, 4]);
 
         // Serialize
         let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&envelope).unwrap();

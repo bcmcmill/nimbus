@@ -3,7 +3,7 @@
 //! These benchmarks measure frame encoding and decoding throughput
 //! at various payload sizes.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use nimbus_codec::NimbusCodec;
 use ntex_bytes::BytesMut;
 use ntex_codec::Decoder as _;
@@ -129,13 +129,17 @@ fn bench_alignment_overhead(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(size as u64));
 
         // Baseline: simple Vec copy
-        group.bench_with_input(BenchmarkId::new("vec_copy", size), &payload, |b, payload| {
-            b.iter(|| {
-                let mut v = Vec::with_capacity(payload.len());
-                v.extend_from_slice(black_box(payload));
-                black_box(v);
-            });
-        });
+        group.bench_with_input(
+            BenchmarkId::new("vec_copy", size),
+            &payload,
+            |b, payload| {
+                b.iter(|| {
+                    let mut v = Vec::with_capacity(payload.len());
+                    v.extend_from_slice(black_box(payload));
+                    black_box(v);
+                });
+            },
+        );
 
         // Aligned decode
         group.bench_with_input(

@@ -33,13 +33,13 @@ mod uds;
 mod tls;
 
 pub use mux::Multiplexer;
-pub use pool::{ConnectionPool, PoolConfig, PooledConnection, PoolStats};
+pub use pool::{ConnectionPool, PoolConfig, PoolStats, PooledConnection};
 pub use tcp::{
     RequestHandler, TcpClient, TcpClientConfig, TcpConnection, TcpServer, TcpServerConfig,
 };
 
 #[cfg(feature = "uds")]
-pub use uds::{UnixClient, UnixServer};
+pub use uds::{UnixClient, UnixClientConfig, UnixConnection, UnixServer, UnixServerConfig};
 
 #[cfg(feature = "tls")]
 pub use tls::{TlsClientConfig, TlsServerConfig};

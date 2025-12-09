@@ -1,12 +1,14 @@
 //! DNS-based service discovery.
 
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
+use futures::channel::mpsc;
 use futures_core::Stream;
+use hickory_resolver::Resolver as HickoryResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::Resolver as HickoryResolver;
-use tokio::sync::watch;
 
 use crate::resolver::{Endpoint, ResolveError, Resolver};
 
@@ -65,9 +67,10 @@ impl DnsResolver {
 
     /// Create a resolver with custom configuration.
     pub fn with_config(config: ResolverConfig, opts: ResolverOpts) -> Self {
-        let resolver = HickoryResolver::builder_with_config(config, TokioConnectionProvider::default())
-            .with_options(opts)
-            .build();
+        let resolver =
+            HickoryResolver::builder_with_config(config, TokioConnectionProvider::default())
+                .with_options(opts)
+                .build();
 
         Self {
             resolver,
@@ -110,7 +113,9 @@ impl DnsResolver {
 
         // Sort by priority (lower is better), then by weight
         endpoints.sort_by(|a, b| {
-            a.priority.cmp(&b.priority).then_with(|| b.weight.cmp(&a.weight))
+            a.priority
+                .cmp(&b.priority)
+                .then_with(|| b.weight.cmp(&a.weight))
         });
 
         Ok(endpoints)
@@ -167,76 +172,50 @@ impl Resolver for DnsResolver {
         let resolver = Self::new();
         let service = service.to_string();
 
-        // Create a watch channel for updates
-        let (tx, rx) = watch::channel(Vec::new());
+        // Create an mpsc channel for updates
+        let (mut tx, rx) = mpsc::channel(16);
 
         // Spawn a task to periodically resolve and update
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        ntex::rt::spawn(async move {
+            let interval = ntex::time::interval(std::time::Duration::from_secs(30));
 
             loop {
                 interval.tick().await;
 
                 if let Ok(endpoints) = resolver.resolve(&service).await {
-                    if tx.send(endpoints).is_err() {
-                        break; // Receiver dropped
+                    if tx.try_send(endpoints).is_err() {
+                        break; // Receiver dropped or buffer full
                     }
                 }
             }
         });
 
-        // Convert watch receiver to a stream
-        tokio_stream::wrappers::WatchStream::new(rx)
+        // Wrap the receiver as a Stream
+        EndpointStream { rx }
     }
 }
 
-// Helper for converting watch receiver to stream
-mod tokio_stream {
-    pub mod wrappers {
-        use futures_core::Stream;
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-        use tokio::sync::watch;
+/// Stream wrapper for endpoint updates from DNS resolution.
+struct EndpointStream {
+    rx: mpsc::Receiver<Vec<Endpoint>>,
+}
 
-        pub struct WatchStream<T> {
-            inner: watch::Receiver<T>,
-        }
+impl Stream for EndpointStream {
+    type Item = Vec<Endpoint>;
 
-        impl<T: Clone> WatchStream<T> {
-            pub fn new(rx: watch::Receiver<T>) -> Self {
-                Self { inner: rx }
-            }
-        }
-
-        impl<T: Clone + Send> Stream for WatchStream<T> {
-            type Item = T;
-
-            fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-                match self.inner.has_changed() {
-                    Ok(true) => {
-                        let value = self.inner.borrow_and_update().clone();
-                        Poll::Ready(Some(value))
-                    }
-                    Ok(false) => {
-                        // Register waker for future changes
-                        cx.waker().wake_by_ref();
-                        Poll::Pending
-                    }
-                    Err(_) => Poll::Ready(None),
-                }
-            }
-        }
-
-        impl<T> Unpin for WatchStream<T> {}
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.rx).poll_next(cx)
     }
 }
+
+impl Unpin for EndpointStream {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_dns_resolver_creation() {
+    #[test]
+    fn test_dns_resolver_creation() {
         let resolver = DnsResolver::new();
         assert!(resolver.default_port.is_none());
 

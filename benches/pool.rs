@@ -3,7 +3,7 @@
 //! These benchmarks measure connection pool performance
 //! including acquisition, return, and concurrent access patterns.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use nimbus_transport::{ConnectionPool, PoolConfig};
 use std::net::SocketAddr;
 use std::sync::Arc;

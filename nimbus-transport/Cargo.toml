@@ -20,6 +20,7 @@ nimbus-core.workspace = true
 nimbus-codec.workspace = true
 ntex.workspace = true
 ntex-bytes.workspace = true
+ntex-codec.workspace = true
 ntex-io.workspace = true
 ntex-connect.workspace = true
 ntex-service.workspace = true
@@ -28,7 +29,8 @@ ntex-tls = { workspace = true, optional = true }
 rkyv.workspace = true
 futures.workspace = true
 futures-core.workspace = true
-tokio = { workspace = true, features = ["sync"] }
+futures-timer.workspace = true
+async-lock.workspace = true
 dashmap.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true

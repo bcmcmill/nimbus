@@ -3,10 +3,10 @@
 //! These benchmarks measure serialization/deserialization throughput
 //! and compare rkyv's zero-copy approach vs traditional serde.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use nimbus_codec::AlignedBufferPool;
 use nimbus_core::{MessageType, RpcEnvelope};
-use rkyv::{rancor::Error as RkyvError, Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize, rancor::Error as RkyvError};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// Test message for benchmarking serialization.
@@ -73,7 +73,8 @@ fn bench_rkyv_deserialize(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &bytes, |b, bytes| {
             b.iter(|| {
                 // Zero-copy access - this is O(1)!
-                let archived = rkyv::access::<ArchivedBenchMessage, RkyvError>(black_box(bytes)).unwrap();
+                let archived =
+                    rkyv::access::<ArchivedBenchMessage, RkyvError>(black_box(bytes)).unwrap();
                 black_box(archived.id);
                 black_box(&archived.name);
                 black_box(archived.payload.len());
@@ -157,9 +158,10 @@ fn bench_rpc_envelope(c: &mut Criterion) {
             &bytes,
             |b, bytes| {
                 b.iter(|| {
-                    let archived =
-                        rkyv::access::<nimbus_core::ArchivedRpcEnvelope, RkyvError>(black_box(bytes))
-                            .unwrap();
+                    let archived = rkyv::access::<nimbus_core::ArchivedRpcEnvelope, RkyvError>(
+                        black_box(bytes),
+                    )
+                    .unwrap();
                     black_box(archived.request_id);
                 });
             },
