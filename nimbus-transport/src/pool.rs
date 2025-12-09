@@ -107,7 +107,10 @@ impl<C: Send + 'static> PooledConnection<C> {
 
     /// Take ownership of the connection (removing it from the pool).
     pub fn take(mut self) -> C {
-        self.pool = None;
+        // Release the slot back to the pool before taking the connection
+        if let Some(pool) = self.pool.take() {
+            pool.release_slot(self.addr);
+        }
         self.connection.take().expect("connection already taken")
     }
 
@@ -155,6 +158,8 @@ impl<C: Send + 'static> ConnectionPoolInner<C> {
 
         // Don't return expired connections
         if created.elapsed() > self.config.max_lifetime {
+            // Still need to release the slot even if connection is expired
+            self.release_slot(addr);
             return;
         }
 
@@ -165,6 +170,14 @@ impl<C: Send + 'static> ConnectionPoolInner<C> {
                 created,
                 returned: Instant::now(),
             });
+            endpoint.semaphore.add_permits(1);
+        }
+    }
+
+    /// Release a connection slot without returning the connection to the pool.
+    /// Called when a connection is permanently taken out of the pool.
+    fn release_slot(&self, addr: SocketAddr) {
+        if let Some(endpoint) = self.endpoints.get(&addr) {
             endpoint.semaphore.add_permits(1);
         }
     }

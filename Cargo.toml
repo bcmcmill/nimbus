@@ -35,7 +35,7 @@ serde_json = { workspace = true }
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 authors = ["Brandon McMillan"]
 repository = "https://github.com/brandon/nimbus"
 description = "Blazing-fast, zero-copy RPC framework built in Rust"
@@ -92,6 +92,11 @@ proc-macro2 = "1.0.103"
 
 # DNS resolution (for nimbus-discovery)
 hickory-resolver = "0.25.2"
+
+# TLS support (for nimbus-transport)
+rustls = "0.23"
+rustls-pemfile = "2.0"
+webpki-roots = "0.26"
 
 # Testing and benchmarking
 criterion = { version = "0.8.1", features = ["html_reports", "async_tokio"] }

@@ -12,7 +12,7 @@ categories = ["network-programming", "asynchronous"]
 default = ["tokio"]
 tokio = ["ntex/tokio"]
 compio = ["ntex/compio"]
-tls = ["ntex-tls"]
+tls = ["dep:ntex-tls", "ntex-tls/rustls", "dep:rustls", "dep:rustls-pemfile", "dep:webpki-roots"]
 uds = []
 
 [dependencies]
@@ -26,6 +26,9 @@ ntex-connect.workspace = true
 ntex-service.workspace = true
 ntex-util.workspace = true
 ntex-tls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+webpki-roots = { workspace = true, optional = true }
 rkyv.workspace = true
 futures.workspace = true
 futures-core.workspace = true
