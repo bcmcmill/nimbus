@@ -47,6 +47,7 @@ pub struct NimbusCodec {
 
 impl NimbusCodec {
     /// Create a new codec with default settings.
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -55,12 +56,14 @@ impl NimbusCodec {
     }
 
     /// Create a codec with a custom maximum frame size.
+    #[inline]
     #[must_use]
     pub fn with_max_frame_size(max_frame_size: usize) -> Self {
         Self { max_frame_size }
     }
 
     /// Get the maximum frame size.
+    #[inline]
     #[must_use]
     pub fn max_frame_size(&self) -> usize {
         self.max_frame_size
@@ -77,6 +80,7 @@ impl Decoder for NimbusCodec {
     type Item = AlignedVec;
     type Error = CodecError;
 
+    #[inline]
     fn decode(&self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         // Need at least 4 bytes for the length prefix
         if src.len() < 4 {
@@ -121,6 +125,7 @@ impl Encoder for NimbusCodec {
     type Item = Vec<u8>;
     type Error = CodecError;
 
+    #[inline]
     fn encode(&self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let len = item.len();
 
@@ -146,6 +151,46 @@ impl Encoder for NimbusCodec {
 }
 
 impl NimbusCodec {
+    /// Decode a frame from a byte slice without copying.
+    ///
+    /// Returns `Ok(Some((frame, consumed)))` if a complete frame was decoded,
+    /// where `consumed` is the number of bytes read from the input.
+    /// Returns `Ok(None)` if more data is needed.
+    ///
+    /// This method avoids the allocation overhead of creating a `BytesMut`
+    /// from the input slice, making it more efficient for hot paths.
+    #[inline]
+    pub fn decode_slice(&self, src: &[u8]) -> Result<Option<(AlignedVec, usize)>, CodecError> {
+        // Need at least 4 bytes for the length prefix
+        if src.len() < 4 {
+            return Ok(None);
+        }
+
+        // Read length (little-endian u32)
+        let len = u32::from_le_bytes([src[0], src[1], src[2], src[3]]) as usize;
+
+        // Validate frame size
+        if len > self.max_frame_size {
+            return Err(CodecError::FrameTooLarge {
+                size: len,
+                max: self.max_frame_size,
+            });
+        }
+
+        // Check if we have the complete frame
+        let total_len = 4 + len;
+        if src.len() < total_len {
+            return Ok(None);
+        }
+
+        // Copy payload to aligned buffer for rkyv zero-copy access
+        // This is the only copy in the entire deserialization path
+        let mut aligned = AlignedVec::with_capacity(len);
+        aligned.extend_from_slice(&src[4..total_len]);
+
+        Ok(Some((aligned, total_len)))
+    }
+
     /// Encode a byte slice into the buffer.
     pub fn encode_slice(&self, item: &[u8], dst: &mut BytesMut) -> Result<(), CodecError> {
         let len = item.len();

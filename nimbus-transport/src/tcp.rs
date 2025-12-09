@@ -13,7 +13,6 @@ use ntex::io::{Io, IoBoxed};
 use ntex::service::fn_service;
 use ntex::util::Buf;
 use ntex_bytes::BytesMut;
-use ntex_codec::Decoder;
 use rkyv::util::AlignedVec;
 use std::pin::pin;
 
@@ -116,12 +115,14 @@ impl TcpConnection {
     }
 
     /// Check if the connection is still open.
+    #[inline]
     #[must_use]
     pub fn is_open(&self) -> bool {
         !self.io.borrow().is_closed()
     }
 
     /// Close the connection.
+    #[inline]
     pub fn close(&self) {
         self.mux.cancel_all();
         self.io.borrow().close();
@@ -158,20 +159,16 @@ impl TcpConnection {
         let codec = &self.codec;
 
         loop {
-            // Try to decode from existing buffer
-            let result: Result<Option<AlignedVec>, std::io::Error> = io.with_read_buf(|read_buf| {
-                let mut buf = BytesMut::from(read_buf.as_ref());
-                match codec.decode(&mut buf) {
-                    Ok(Some(frame)) => {
-                        // Update the read position
-                        let consumed = read_buf.len() - buf.len();
+            // Try to decode from existing buffer (zero-copy path)
+            let result: Result<Option<AlignedVec>, std::io::Error> =
+                io.with_read_buf(|read_buf| match codec.decode_slice(read_buf.as_ref()) {
+                    Ok(Some((frame, consumed))) => {
                         read_buf.advance(consumed);
                         Ok(Some(frame))
                     }
                     Ok(None) => Ok(None),
                     Err(e) => Err(std::io::Error::other(format!("{}", e))),
-                }
-            });
+                });
 
             match result {
                 Ok(Some(frame)) => return Ok(frame),
@@ -333,19 +330,15 @@ where
             break;
         }
 
-        // Try to decode frames from the read buffer
+        // Try to decode frames from the read buffer (zero-copy path)
         let frame_result: Result<Option<AlignedVec>, std::io::Error> =
-            io.with_read_buf(|read_buf| {
-                let mut buf = BytesMut::from(read_buf.as_ref());
-                match codec.decode(&mut buf) {
-                    Ok(Some(frame)) => {
-                        let consumed = read_buf.len() - buf.len();
-                        read_buf.advance(consumed);
-                        Ok(Some(frame))
-                    }
-                    Ok(None) => Ok(None),
-                    Err(e) => Err(std::io::Error::other(format!("{}", e))),
+            io.with_read_buf(|read_buf| match codec.decode_slice(read_buf.as_ref()) {
+                Ok(Some((frame, consumed))) => {
+                    read_buf.advance(consumed);
+                    Ok(Some(frame))
                 }
+                Ok(None) => Ok(None),
+                Err(e) => Err(std::io::Error::other(format!("{}", e))),
             });
 
         match frame_result {

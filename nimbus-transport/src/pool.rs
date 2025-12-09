@@ -96,16 +96,50 @@ pub struct PooledConnection<C: Send + 'static> {
 
 impl<C: Send + 'static> PooledConnection<C> {
     /// Get the connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the connection has already been taken via [`take`](Self::take).
+    /// Use [`try_connection`](Self::try_connection) for a non-panicking alternative.
+    #[inline]
     pub fn connection(&self) -> &C {
         self.connection.as_ref().expect("connection taken")
     }
 
+    /// Try to get the connection.
+    ///
+    /// Returns `None` if the connection has already been taken.
+    #[inline]
+    pub fn try_connection(&self) -> Option<&C> {
+        self.connection.as_ref()
+    }
+
     /// Get mutable access to the connection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the connection has already been taken via [`take`](Self::take).
+    /// Use [`try_connection_mut`](Self::try_connection_mut) for a non-panicking alternative.
+    #[inline]
     pub fn connection_mut(&mut self) -> &mut C {
         self.connection.as_mut().expect("connection taken")
     }
 
+    /// Try to get mutable access to the connection.
+    ///
+    /// Returns `None` if the connection has already been taken.
+    #[inline]
+    pub fn try_connection_mut(&mut self) -> Option<&mut C> {
+        self.connection.as_mut()
+    }
+
     /// Take ownership of the connection (removing it from the pool).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the connection has already been taken.
+    /// Use [`try_take`](Self::try_take) for a non-panicking alternative.
+    #[inline]
     pub fn take(mut self) -> C {
         // Release the slot back to the pool before taking the connection
         if let Some(pool) = self.pool.take() {
@@ -114,12 +148,32 @@ impl<C: Send + 'static> PooledConnection<C> {
         self.connection.take().expect("connection already taken")
     }
 
+    /// Try to take ownership of the connection (removing it from the pool).
+    ///
+    /// Returns `None` if the connection has already been taken.
+    #[inline]
+    pub fn try_take(&mut self) -> Option<C> {
+        // Release the slot back to the pool before taking the connection
+        if let Some(pool) = self.pool.take() {
+            pool.release_slot(self.addr);
+        }
+        self.connection.take()
+    }
+
+    /// Check if the connection is still available (not taken).
+    #[inline]
+    pub fn is_available(&self) -> bool {
+        self.connection.is_some()
+    }
+
     /// Check if the connection has expired.
+    #[inline]
     pub fn is_expired(&self, max_lifetime: Duration) -> bool {
         self.created.elapsed() > max_lifetime
     }
 
     /// Check if the connection has been idle too long.
+    #[inline]
     pub fn is_idle(&self, idle_timeout: Duration) -> bool {
         self.last_used.elapsed() > idle_timeout
     }

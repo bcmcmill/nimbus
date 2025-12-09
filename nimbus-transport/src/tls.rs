@@ -1,21 +1,63 @@
-//! TLS support for nimbus transport.
+//! TLS support for nimbus transport using Rustls.
 //!
-//! This module provides TLS configuration and transport types using Rustls.
+//! This module provides TLS configuration types for securing connections:
 //!
-//! ## Example
+//! - [`TlsClientConfig`] - Client-side TLS configuration
+//! - [`TlsServerConfig`] - Server-side TLS configuration
+//! - [`ClientAuth`] - Client authentication modes for mutual TLS
+//!
+//! ## Security Features
+//!
+//! - Modern TLS 1.2/1.3 only (via Rustls)
+//! - No OpenSSL dependency - pure Rust implementation
+//! - Mozilla root certificates included by default
+//! - Mutual TLS (mTLS) support for client authentication
+//!
+//! ## Client Configuration
 //!
 //! ```rust,ignore
-//! use nimbus_transport::{TlsClient, TlsClientConfig, TlsServerConfig};
+//! use nimbus_transport::TlsClientConfig;
 //!
-//! // Client with default root certificates
-//! let client_config = TlsClientConfig::new();
-//! let client = TlsClient::new(client_config);
-//! let conn = client.connect("example.com:443").await?;
+//! // Connect to public TLS servers using Mozilla's root certificates
+//! let config = TlsClientConfig::new();
 //!
-//! // Server with certificate files
-//! let server_config = TlsServerConfig::load_from_pem("cert.pem", "key.pem")?;
-//! let server = TlsServer::new(server_config, handler);
-//! server.run().await?;
+//! // Or load custom root certificates for private/self-signed servers
+//! let root_certs = nimbus_transport::load_root_certs("ca-cert.pem")?;
+//! let config = TlsClientConfig::with_root_certs(root_certs);
+//!
+//! // For mutual TLS, provide client certificate
+//! let config = TlsClientConfig::load_client_cert_from_pem(
+//!     root_certs,
+//!     "client-cert.pem",
+//!     "client-key.pem",
+//! )?;
+//! ```
+//!
+//! ## Server Configuration
+//!
+//! ```rust,ignore
+//! use nimbus_transport::{TlsServerConfig, ClientAuth, load_root_certs};
+//!
+//! // Basic server with certificate
+//! let config = TlsServerConfig::load_from_pem("server-cert.pem", "server-key.pem")?;
+//!
+//! // Server requiring client certificates (mutual TLS)
+//! let client_ca = load_root_certs("client-ca.pem")?;
+//! let config = TlsServerConfig::with_client_auth(
+//!     cert_chain,
+//!     private_key,
+//!     ClientAuth::Required(std::sync::Arc::new(client_ca)),
+//! )?;
+//! ```
+//!
+//! ## Handshake Timeout
+//!
+//! Both client and server configurations support a handshake timeout
+//! (default: 10 seconds) to prevent slow-loris style attacks:
+//!
+//! ```rust,ignore
+//! let config = TlsClientConfig::new()
+//!     .handshake_timeout(Duration::from_secs(5));
 //! ```
 
 use std::fs::File;

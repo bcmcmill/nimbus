@@ -120,7 +120,7 @@ impl RpcEnvelope {
     ) -> Self {
         // Serialize the error into payload
         let payload = rkyv::to_bytes::<rkyv::rancor::Error>(&error)
-            .map(|v| v.to_vec())
+            .map(|v| v.into_vec())
             .unwrap_or_default();
 
         Self {

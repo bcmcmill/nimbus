@@ -41,6 +41,7 @@ pub struct Multiplexer {
 
 impl Multiplexer {
     /// Create a new multiplexer.
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -52,6 +53,7 @@ impl Multiplexer {
     /// Register a new pending request.
     ///
     /// Returns the request ID and a receiver for the response.
+    #[inline]
     pub fn register(&self) -> (u64, oneshot::Receiver<Result<AlignedVec, NimbusError>>) {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
@@ -65,6 +67,7 @@ impl Multiplexer {
     ///
     /// Returns `true` if the response was delivered, `false` if no
     /// pending request with that ID was found (e.g., it timed out).
+    #[inline]
     pub fn dispatch(&self, request_id: u64, response: AlignedVec) -> bool {
         if let Some((_, pending)) = self.pending.remove(&request_id) {
             // Ignore send errors - receiver may have been dropped (timeout)
@@ -77,6 +80,7 @@ impl Multiplexer {
     }
 
     /// Dispatch an error to a pending request.
+    #[inline]
     pub fn dispatch_error(&self, request_id: u64, error: NimbusError) -> bool {
         if let Some((_, pending)) = self.pending.remove(&request_id) {
             let _ = pending.sender.send(Err(error));
@@ -89,6 +93,7 @@ impl Multiplexer {
     /// Cancel a pending request.
     ///
     /// This is called when a request times out or is explicitly cancelled.
+    #[inline]
     pub fn cancel(&self, request_id: u64) {
         if let Some((_, pending)) = self.pending.remove(&request_id) {
             let _ = pending.sender.send(Err(NimbusError::Cancelled));
@@ -97,24 +102,31 @@ impl Multiplexer {
 
     /// Cancel all pending requests (e.g., on connection close).
     pub fn cancel_all(&self) {
-        // Collect keys first to avoid iterator invalidation
-        let keys: Vec<u64> = self.pending.iter().map(|e| *e.key()).collect();
-
         let error = NimbusError::Transport(TransportError::ConnectionClosed);
-        for id in keys {
-            if let Some((_, pending)) = self.pending.remove(&id) {
+
+        // Remove items one by one until the map is empty.
+        // This avoids allocating a Vec of keys.
+        loop {
+            let key = match self.pending.iter().next() {
+                Some(entry) => *entry.key(),
+                None => break,
+            };
+
+            if let Some((_, pending)) = self.pending.remove(&key) {
                 let _ = pending.sender.send(Err(error.clone()));
             }
         }
     }
 
     /// Get the number of pending requests.
+    #[inline]
     #[must_use]
     pub fn pending_count(&self) -> usize {
         self.pending.len()
     }
 
     /// Check if there are any pending requests.
+    #[inline]
     #[must_use]
     pub fn has_pending(&self) -> bool {
         !self.pending.is_empty()

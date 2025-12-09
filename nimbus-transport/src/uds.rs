@@ -2,6 +2,66 @@
 //!
 //! This module provides Unix domain socket support for local IPC,
 //! offering lower latency than TCP for same-machine communication.
+//!
+//! ## When to Use UDS
+//!
+//! Unix domain sockets are ideal when:
+//! - Client and server run on the same machine
+//! - You need lower latency than TCP (no network stack overhead)
+//! - You want file-system based access control
+//! - You don't need to cross machine boundaries
+//!
+//! Use TCP instead when:
+//! - Clients connect from remote machines
+//! - You need network-level load balancing
+//! - Cross-platform compatibility is required (Windows has limited UDS support)
+//!
+//! ## Performance
+//!
+//! UDS typically provides:
+//! - ~30-50% lower latency than TCP loopback
+//! - Higher throughput for small messages
+//! - No TCP connection establishment overhead
+//!
+//! ## Client Example
+//!
+//! ```rust,ignore
+//! use nimbus_transport::{UnixClient, UnixClientConfig};
+//!
+//! let client = UnixClient::new();
+//! let conn = client.connect("/tmp/nimbus.sock").await?;
+//!
+//! // Use connection for RPC calls
+//! conn.send(request_bytes).await?;
+//! let response = conn.recv().await?;
+//! ```
+//!
+//! ## Server Example
+//!
+//! ```rust,ignore
+//! use nimbus_transport::{UnixServer, UnixServerConfig, RequestHandler};
+//!
+//! struct MyHandler;
+//! impl RequestHandler for MyHandler {
+//!     async fn handle(&self, request: AlignedVec) -> Result<Vec<u8>, NimbusError> {
+//!         // Process request and return response
+//!         Ok(vec![])
+//!     }
+//! }
+//!
+//! let config = UnixServerConfig::new("/tmp/my-service.sock")
+//!     .workers(4)
+//!     .max_connections(1000);
+//!
+//! let server = UnixServer::with_config(config, MyHandler);
+//! server.run().await?;
+//! ```
+//!
+//! ## Socket File Cleanup
+//!
+//! The server automatically removes any existing socket file before binding.
+//! Ensure your application has appropriate permissions to create and remove
+//! the socket file at the configured path.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -16,7 +76,6 @@ use ntex::io::IoBoxed;
 use ntex::service::fn_service;
 use ntex::util::Buf;
 use ntex_bytes::BytesMut;
-use ntex_codec::Decoder;
 use rkyv::util::AlignedVec;
 
 use nimbus_codec::NimbusCodec;
@@ -176,20 +235,16 @@ impl UnixConnection {
         let codec = &self.codec;
 
         loop {
-            // Try to decode from existing buffer
-            let result: Result<Option<AlignedVec>, std::io::Error> = io.with_read_buf(|read_buf| {
-                let mut buf = BytesMut::from(read_buf.as_ref());
-                match codec.decode(&mut buf) {
-                    Ok(Some(frame)) => {
-                        // Update the read position
-                        let consumed = read_buf.len() - buf.len();
+            // Try to decode from existing buffer (zero-copy path)
+            let result: Result<Option<AlignedVec>, std::io::Error> =
+                io.with_read_buf(|read_buf| match codec.decode_slice(read_buf.as_ref()) {
+                    Ok(Some((frame, consumed))) => {
                         read_buf.advance(consumed);
                         Ok(Some(frame))
                     }
                     Ok(None) => Ok(None),
                     Err(e) => Err(std::io::Error::other(format!("{}", e))),
-                }
-            });
+                });
 
             match result {
                 Ok(Some(frame)) => return Ok(frame),
@@ -397,19 +452,15 @@ where
             break;
         }
 
-        // Try to decode frames from the read buffer
+        // Try to decode frames from the read buffer (zero-copy path)
         let frame_result: Result<Option<AlignedVec>, std::io::Error> =
-            io.with_read_buf(|read_buf| {
-                let mut buf = BytesMut::from(read_buf.as_ref());
-                match codec.decode(&mut buf) {
-                    Ok(Some(frame)) => {
-                        let consumed = read_buf.len() - buf.len();
-                        read_buf.advance(consumed);
-                        Ok(Some(frame))
-                    }
-                    Ok(None) => Ok(None),
-                    Err(e) => Err(std::io::Error::other(format!("{}", e))),
+            io.with_read_buf(|read_buf| match codec.decode_slice(read_buf.as_ref()) {
+                Ok(Some((frame, consumed))) => {
+                    read_buf.advance(consumed);
+                    Ok(Some(frame))
                 }
+                Ok(None) => Ok(None),
+                Err(e) => Err(std::io::Error::other(format!("{}", e))),
             });
 
         match frame_result {

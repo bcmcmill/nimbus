@@ -28,22 +28,75 @@ impl PooledBuffer {
     }
 
     /// Get mutable access to the inner buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer has already been taken via [`take`](Self::take).
+    /// Use [`try_inner_mut`](Self::try_inner_mut) for a non-panicking alternative.
+    #[inline]
     #[must_use]
     pub fn inner_mut(&mut self) -> &mut AlignedVec {
         self.buffer.as_mut().expect("buffer already taken")
     }
 
+    /// Try to get mutable access to the inner buffer.
+    ///
+    /// Returns `None` if the buffer has already been taken.
+    #[inline]
+    #[must_use]
+    pub fn try_inner_mut(&mut self) -> Option<&mut AlignedVec> {
+        self.buffer.as_mut()
+    }
+
     /// Get read access to the inner buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer has already been taken via [`take`](Self::take).
+    /// Use [`try_inner`](Self::try_inner) for a non-panicking alternative.
+    #[inline]
     #[must_use]
     pub fn inner(&self) -> &AlignedVec {
         self.buffer.as_ref().expect("buffer already taken")
     }
 
+    /// Try to get read access to the inner buffer.
+    ///
+    /// Returns `None` if the buffer has already been taken.
+    #[inline]
+    #[must_use]
+    pub fn try_inner(&self) -> Option<&AlignedVec> {
+        self.buffer.as_ref()
+    }
+
     /// Take ownership of the inner buffer, preventing return to pool.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer has already been taken.
+    /// Use [`try_take`](Self::try_take) for a non-panicking alternative.
+    #[inline]
     #[must_use]
     pub fn take(mut self) -> AlignedVec {
         self.pool = None;
         self.buffer.take().expect("buffer already taken")
+    }
+
+    /// Try to take ownership of the inner buffer, preventing return to pool.
+    ///
+    /// Returns `None` if the buffer has already been taken.
+    #[inline]
+    #[must_use]
+    pub fn try_take(&mut self) -> Option<AlignedVec> {
+        self.pool = None;
+        self.buffer.take()
+    }
+
+    /// Check if the buffer is still available (not taken).
+    #[inline]
+    #[must_use]
+    pub fn is_available(&self) -> bool {
+        self.buffer.is_some()
     }
 
     /// Clear the buffer contents but keep the capacity.
@@ -122,6 +175,7 @@ pub struct AlignedBufferPool {
 
 impl AlignedBufferPool {
     /// Create a new buffer pool with default settings.
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self::with_config(DEFAULT_BUFFER_SIZE, DEFAULT_POOL_CAPACITY)
@@ -147,6 +201,7 @@ impl AlignedBufferPool {
     ///
     /// Returns a pooled buffer if available, otherwise creates a new one.
     /// The buffer is automatically returned to the pool when dropped.
+    #[inline]
     #[must_use]
     pub fn acquire(&self) -> PooledBuffer {
         let buffer = {
@@ -163,6 +218,7 @@ impl AlignedBufferPool {
     }
 
     /// Get the number of buffers currently in the pool.
+    #[inline]
     #[must_use]
     pub fn available(&self) -> usize {
         self.inner.buffers.lock().len()
