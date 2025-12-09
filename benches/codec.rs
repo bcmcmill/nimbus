@@ -3,7 +3,9 @@
 //! These benchmarks measure serialization/deserialization throughput
 //! and compare rkyv's zero-copy approach vs traditional serde.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use nimbus_codec::AlignedBufferPool;
 use nimbus_core::{MessageType, RpcEnvelope};
 use rkyv::{Archive, Deserialize, Serialize, rancor::Error as RkyvError};

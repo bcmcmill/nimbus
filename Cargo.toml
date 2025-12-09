@@ -36,7 +36,7 @@ serde_json = { workspace = true }
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-authors = ["Brandon"]
+authors = ["Brandon McMillan"]
 repository = "https://github.com/brandon/nimbus"
 description = "Blazing-fast, zero-copy RPC framework built in Rust"
 keywords = ["rpc", "networking", "async", "zero-copy", "rkyv"]

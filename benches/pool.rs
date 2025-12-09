@@ -3,11 +3,10 @@
 //! These benchmarks measure connection pool performance
 //! including acquisition, return, and concurrent access patterns.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use std::{hint::black_box, net::SocketAddr, sync::Arc, time::Duration};
+
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use nimbus_transport::{ConnectionPool, PoolConfig};
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::runtime::Runtime;
 
 /// Create a pool for benchmarking.

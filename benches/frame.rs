@@ -3,7 +3,9 @@
 //! These benchmarks measure frame encoding and decoding throughput
 //! at various payload sizes.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use nimbus_codec::NimbusCodec;
 use ntex_bytes::BytesMut;
 use ntex_codec::Decoder as _;

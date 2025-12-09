@@ -3,7 +3,9 @@
 //! These benchmarks measure full RPC path performance including
 //! serialization, framing, and simulated network I/O.
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use nimbus_codec::NimbusCodec;
 use nimbus_core::{MessageType, RpcEnvelope};
 use ntex_bytes::BytesMut;
