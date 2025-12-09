@@ -69,4 +69,7 @@ pub use tcp::{
 pub use uds::{UnixClient, UnixClientConfig, UnixConnection, UnixServer, UnixServerConfig};
 
 #[cfg(feature = "tls")]
-pub use tls::{ClientAuth, TlsClientConfig, TlsServerConfig, load_root_certs, server_name};
+pub use tls::{
+    ClientAuth, TlsClient, TlsClientConfig, TlsConnection, TlsServer, TlsServerBindConfig,
+    TlsServerConfig, load_root_certs, server_name,
+};
