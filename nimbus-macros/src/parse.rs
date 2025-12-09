@@ -2,8 +2,8 @@
 
 use proc_macro2::TokenStream;
 use syn::{
-    Attribute, Error, FnArg, Ident, ItemTrait, Pat, PatType, Result, ReturnType, Signature,
-    TraitItem, TraitItemFn, Type,
+    Attribute, Error, FnArg, Ident, ItemTrait, Pat, PatType, Result, ReturnType, TraitItem,
+    TraitItemFn, Type,
 };
 
 /// Arguments passed to the #[service] attribute.

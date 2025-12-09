@@ -8,10 +8,7 @@
 //! Note: The `#[service]` macro is still in development.
 //! This example shows the manual approach for now.
 
-use nimbus::{
-    Context, NimbusCodec, NimbusError, RequestHandler, TcpClient, TcpClientConfig, TcpServer,
-    TcpServerConfig,
-};
+use nimbus::{NimbusError, RequestHandler};
 use rkyv::{Archive, Deserialize, Serialize, rancor::Error as RkyvError, util::AlignedVec};
 use std::sync::atomic::{AtomicU64, Ordering};
 use thiserror::Error;

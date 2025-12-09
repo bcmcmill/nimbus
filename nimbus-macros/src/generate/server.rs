@@ -11,7 +11,7 @@ pub fn generate_server(service: &ServiceDefinition) -> Result<TokenStream> {
     let vis = &service.vis;
     let trait_name = &service.name;
     let server_name = format_ident!("{}Server", service.name);
-    let request_enum = format_ident!("{}Request", service.name);
+    let _request_enum = format_ident!("{}Request", service.name);
     let response_enum = format_ident!("{}Response", service.name);
     let archived_request = format_ident!("Archived{}Request", service.name);
 

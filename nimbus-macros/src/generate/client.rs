@@ -9,7 +9,7 @@ use crate::parse::{ServiceArgs, ServiceDefinition, StreamingMode};
 /// Generate the client struct and implementation.
 pub fn generate_client(service: &ServiceDefinition, _args: &ServiceArgs) -> Result<TokenStream> {
     let vis = &service.vis;
-    let trait_name = &service.name;
+    let _trait_name = &service.name;
     let client_name = format_ident!("{}Client", service.name);
     let request_enum = format_ident!("{}Request", service.name);
     let response_enum = format_ident!("{}Response", service.name);
